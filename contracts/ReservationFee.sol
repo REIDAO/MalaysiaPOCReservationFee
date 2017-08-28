@@ -1,13 +1,12 @@
 pragma solidity ^0.4.11;
 
 import "./imported/openzeppelin/SafeMath.sol";
-import "./imported/ethereum/Wallet.sol";
 import "./MultisigLogic/MultisigLogic.sol";
 
 contract ReservationFee {
   using SafeMath for uint256;
 
-  Wallet wallet;
+  address wallet;
   MultisigLogic multisigLogic;
 
   enum State { Initial, Reservation, Completed, Contribution, End }
@@ -31,9 +30,7 @@ contract ReservationFee {
   uint public dgxPerMinETHPayment;
   uint public totalEtherPaid;
 
-  event EtherPaid(uint blockNumber, address indexed contributor, uint amount);
-  event EtherImmediateRefund(uint blockNumber, address indexed contributor, uint amount);
-  event DGXContributed(uint blockNumber, address indexed contributor, uint amount);
+  event Tx(string eventName, address indexed contributor, uint amount);
   event MultiSigOpsStatus(string status, bytes32 msg);
 
   /**
@@ -42,7 +39,7 @@ contract ReservationFee {
    * @param _logic the multisig logic.
    */
   function ReservationFee(address _wallet, address _logic) {
-    wallet = Wallet(_wallet);
+    wallet = _wallet;
     multisigLogic = MultisigLogic(_logic);
 
     reservationStartTime = 1501509600; // 07/31/2017 @ 2:00pm (UTC)
@@ -73,14 +70,11 @@ contract ReservationFee {
    * @dev payable fallback function, called when contributor sends ETH (with or without value) to the contract.
    */
   function () external payable {
-    if (msg.value>0) {
-      if (state==State.Initial && now >= reservationStartTime) {
-        state == State.Reservation;
-      }
-      reserve(msg.sender, msg.value);
-    } else {
-      throw;
+    require(msg.value>0);
+    if (state==State.Initial && now >= reservationStartTime) {
+      state = State.Reservation;
     }
+    reserve(msg.sender, msg.value);
   }
 
   /**
@@ -114,7 +108,6 @@ contract ReservationFee {
     if (acceptedAmount > 0) {
       registrations[_contributor].etherPaid = registrations[_contributor].etherPaid.add(acceptedAmount);
       totalEtherPaid = totalEtherPaid.add(acceptedAmount);
-      EtherPaid(block.number, _contributor, acceptedAmount);
 
       if (totalEtherPaid == maxETHPaymentTotal) {
         state = State.Completed;
@@ -122,8 +115,9 @@ contract ReservationFee {
     }
     if (refundAmount > 0) {
       _contributor.transfer(refundAmount);
-      EtherImmediateRefund(block.number, _contributor, refundAmount);
     }
+    Tx("EtherPaid", _contributor, acceptedAmount);
+    Tx("EtherRefunded", _contributor, refundAmount);
   }
 
   /**
@@ -170,7 +164,7 @@ contract ReservationFee {
   function markDgxContribution(address _contributor, uint _amount) fundraiserOnly contributionState {
     require(isInWhitelist(_contributor));
     registrations[_contributor].dgxContributed = registrations[_contributor].dgxContributed.add(_amount);
-    DGXContributed(block.number, _contributor, _amount);
+    Tx("DGXContributed", _contributor, _amount);
   }
 
   /**
