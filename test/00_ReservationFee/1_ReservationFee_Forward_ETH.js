@@ -156,17 +156,6 @@ contract('All', function(accounts) {
     ;
   })
 
-  it("Refund failed due to not in any refund mode", function() {
-    return ReservationFeeInstance.setStateContribution()
-    .then(function(result) {
-      return web3.eth.sendTransaction({from:accounts[3], to:ReservationFeeInstance.address, value: 0, gas: 150000})
-    })
-    .catch(function(err) {
-      assert(true, err.toString().indexOf("invalid opcode")!=-1);
-    })
-    ;
-  });
-
   it("Send all Ether", function() {
     return ReservationFeeInstance.sendAllEther("", {from:accounts[1]})
     .then(function(result) {
